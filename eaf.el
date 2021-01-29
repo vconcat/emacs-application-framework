@@ -371,7 +371,7 @@ Try not to modify this alist directly.  Use `eaf-setq' to modify instead."
     ("M-D" . "select_text")
     ("M-s" . "open_link")
     ("M-S" . "open_link_new_buffer")
-    ("M-d" . "open_link_background_buffer")
+    ("M-B" . "open_link_background_buffer")
     ("C-/" . "undo_action")
     ("M-_" . "redo_action")
     ("M-w" . "copy_text")
@@ -388,6 +388,7 @@ Try not to modify this alist directly.  Use `eaf-setq' to modify instead."
     ("M->" . "scroll_to_bottom")
     ("M-p" . "duplicate_page")
     ("M-t" . "new_blank_page")
+    ("M-d" . "toggle_dark_mode")
     ("SPC" . "insert_or_scroll_up_page")
     ("J" . "insert_or_select_left_tab")
     ("K" . "insert_or_select_right_tab")
@@ -536,7 +537,9 @@ Try not to modify this alist directly.  Use `eaf-setq' to modify instead."
     ("," . "scroll_up_page")
     ("." . "scroll_down_page")
     ("<" . "scroll_to_begin")
-    (">" . "scroll_to_bottom"))
+    (">" . "scroll_to_bottom")
+    ("<f12>" . "open_devtools")
+    )
   "The keybinding of EAF Image Viewer."
   :type 'cons)
 
@@ -1574,7 +1577,7 @@ of `eaf--buffer-app-name' inside the EAF buffer."
        (throw 'found-eaf t)))))
 
 (defun eaf--show-message (format-string)
-  (message (concat "[EAF/" eaf--buffer-app-name "] " format-string)))
+  (message (concat "[EAF/" eaf--buffer-app-name "] " (base64-decode-string format-string))))
 
 (defun eaf--set-emacs-var (name value eaf-specific)
   "Set Lisp variable NAME with VALUE on the Emacs side.
@@ -2531,8 +2534,9 @@ The key is the annot id on PAGE."
   "Determine file extension EXT can be opened by EAF directly by `find-file'.
 
 You can configure a blacklist using `eaf-find-file-ext-blacklist'"
-  (and (member ext (append eaf-pdf-extension-list eaf-video-extension-list
-                           eaf-image-extension-list eaf-mindmap-extension-list))
+  (and ext
+       (member (downcase ext) (append eaf-pdf-extension-list eaf-video-extension-list
+                                      eaf-image-extension-list eaf-mindmap-extension-list))
        (not (member ext eaf-find-file-ext-blacklist))))
 
 ;; Make EAF as default app for supported extensions.
