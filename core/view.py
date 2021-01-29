@@ -25,6 +25,31 @@ from PyQt5.QtGui import QPainter, QWindow, QBrush, QColor
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QGraphicsView, QFrame
 import os
 
+# https://stackoverflow.com/a/62206045/11206552
+class EventTypes:
+    """Stores a string name for each event type.
+
+    With PySide2 str() on the event type gives a nice string name,
+    but with PyQt5 it does not. So this method works with both systems.
+    """
+
+    def __init__(self):
+        """Create mapping for all known event types."""
+        self.string_name = {}
+        for name in vars(QEvent):
+            attribute = getattr(QEvent, name)
+            if type(attribute) == QEvent.Type:
+                self.string_name[attribute] = name
+
+    def as_string(self, event: QEvent.Type) -> str:
+        """Return the string name for this event."""
+        try:
+            return self.string_name[event]
+        except KeyError:
+            return f"UnknownEvent:{event}"
+
+event_types = EventTypes()
+
 class View(QWidget):
 
     trigger_focus_event = QtCore.pyqtSignal(str)
@@ -105,9 +130,10 @@ class View(QWidget):
                 horizontal_padding, vertical_padding,
                 horizontal_padding, vertical_padding)
 
-    def eventFilter(self, obj, event):
-        # import time
-        # print(time.time(), event.type())
+    def eventFilter(self, obj, event: QEvent):
+        import time
+        if event.type() != QEvent.UpdateRequest:
+            print(time.time(), event_types.as_string(event.type()), event.spontaneous(), flush=True)
 
         if event.type() in [QEvent.ShortcutOverride]:
             self.buffer.eval_in_emacs.emit('eaf-activate-emacs-window', [])
