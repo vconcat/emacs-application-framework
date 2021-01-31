@@ -7,7 +7,7 @@
 ;; Copyright (C) 2018, Andy Stewart, all rights reserved.
 ;; Created: 2018-06-15 14:10:12
 ;; Version: 0.5
-;; Last-Updated: Wed Jan 27 09:25:35 2021 (-0500)
+;; Last-Updated: Sat Jan 30 14:28:53 2021 (-0500)
 ;;           By: Mingde (Matthew) Zeng
 ;; URL: https://github.com/manateelazycat/emacs-application-framework
 ;; Keywords:
@@ -235,10 +235,6 @@ been initialized."
 
 (defvar eaf-last-frame-height 0)
 
-(defcustom eaf-grip-token ""
-  "Github personal acess token, used by grip."
-  :type 'string)
-
 (defcustom eaf-name "*eaf*"
   "Name of EAF buffer."
   :type 'string)
@@ -297,6 +293,7 @@ It must defined at `eaf-browser-search-engines'."
     (eaf-terminal-dark-mode . "follow")
     (eaf-terminal-font-size . "13")
     (eaf-terminal-font-family . "")
+    (eaf-markdown-dark-mode . "follow")
     (eaf-mindmap-dark-mode . "follow")
     (eaf-mindmap-save-path . "~/Documents")
     (eaf-mindmap-edit-mode . "false")
@@ -529,18 +526,21 @@ Try not to modify this alist directly.  Use `eaf-setq' to modify instead."
     ("-" . "zoom_out")
     ("=" . "zoom_in")
     ("0" . "zoom_reset")
+    ("9" . "zoom_toggle")
     ("x" . "close_buffer")
-    ("j" . "scroll_up")
-    ("k" . "scroll_down")
-    ("h" . "scroll_left")
-    ("l" . "scroll_right")
-    ("," . "scroll_up_page")
-    ("." . "scroll_down_page")
-    ("<" . "scroll_to_begin")
-    (">" . "scroll_to_bottom")
+    ("u" . "rotate_left")
+    ("i" . "rotate_right")
+    ("y" . "flip_horizontal")
+    ("o" . "flip_vertical")
     ("<f12>" . "open_devtools")
     )
   "The keybinding of EAF Image Viewer."
+  :type 'cons)
+
+(defcustom eaf-music-keybinding
+  '(("<f12>" . "open_devtools")
+    )
+  "The keybinding of EAF Music."
   :type 'cons)
 
 (defcustom eaf-terminal-keybinding
@@ -646,52 +646,6 @@ Try not to modify this alist directly.  Use `eaf-setq' to modify instead."
   "The keybinding of EAF Mindmap."
   :type 'cons)
 
-(defcustom eaf-mermaid-keybinding
-  '(("C--" . "zoom_out")
-    ("C-=" . "zoom_in")
-    ("C-0" . "zoom_reset")
-    ("C-s" . "search_text_forward")
-    ("C-r" . "search_text_backward")
-    ("C-n" . "scroll_up")
-    ("C-p" . "scroll_down")
-    ("C-f" . "scroll_right")
-    ("C-b" . "scroll_left")
-    ("C-v" . "scroll_up_page")
-    ("C-w" . "kill_text")
-    ("M-w" . "copy_text")
-    ("M-v" . "scroll_down_page")
-    ("M-<" . "scroll_to_begin")
-    ("M->" . "scroll_to_bottom")
-    ("M-t" . "new_blank_page")
-    ("SPC" . "insert_or_scroll_up_page")
-    ("x" . "insert_or_close_buffer")
-    ("J" . "insert_or_select_left_tab")
-    ("K" . "insert_or_select_right_tab")
-    ("j" . "insert_or_scroll_up")
-    ("k" . "insert_or_scroll_down")
-    ("h" . "insert_or_scroll_left")
-    ("l" . "insert_or_scroll_right")
-    ("d" . "insert_or_scroll_up_page")
-    ("u" . "insert_or_scroll_down_page")
-    ("t" . "insert_or_new_blank_page")
-    ("T" . "insert_or_recover_prev_close_page")
-    ("r" . "insert_or_refresh_page")
-    ("g" . "insert_or_scroll_to_begin")
-    ("x" . "insert_or_close_buffer")
-    ("G" . "insert_or_scroll_to_bottom")
-    ("-" . "insert_or_zoom_out")
-    ("=" . "insert_or_zoom_in")
-    ("0" . "insert_or_zoom_reset")
-    ("m" . "insert_or_save_as_bookmark")
-    ("C-a" . "select_all_or_input_text")
-    ("M-o" . "eval_js")
-    ("M-p" . "eval_js_file")
-    ("<f5>" . "refresh_page")
-    ("<f12>" . "open_devtools")
-    )
-  "The keybinding of EAF Mermaid."
-  :type 'cons)
-
 (defcustom eaf-jupyter-keybinding
   '(("C-+" . "zoom_in")
     ("C--" . "zoom_out")
@@ -728,11 +682,6 @@ Try not to modify this alist directly.  Use `eaf-setq' to modify instead."
   "The extension list of markdown previewer application."
   :type 'cons)
 
-(defcustom eaf-mermaid-extension-list
-  '("mmd")
-  "The extension list of mermaid application."
-  :type 'cons)
-
 (defcustom eaf-image-extension-list
   '("jpg" "jpeg" "png" "bmp" "gif" "svg" "webp")
   "The extension list of image viewer application."
@@ -741,6 +690,11 @@ Try not to modify this alist directly.  Use `eaf-setq' to modify instead."
 (defcustom eaf-video-extension-list
   '("avi" "webm" "rmvb" "ogg" "mp4" "mkv" "m4v")
   "The extension list of video player application."
+  :type 'cons)
+
+(defcustom eaf-music-extension-list
+  '("mp3")
+  "The extension list of music player application."
   :type 'cons)
 
 (defcustom eaf-browser-extension-list
@@ -823,12 +777,12 @@ Add NAME of command `wmctrl -m' to this list."
     ("video-player" . eaf-video-player-keybinding)
     ("js-video-player" . eaf-js-video-player-keybinding)
     ("image-viewer" . eaf-image-viewer-keybinding)
+    ("music" . eaf-music-keybinding)
     ("camera" . eaf-camera-keybinding)
     ("terminal" . eaf-terminal-keybinding)
     ("markdown-previewer" . eaf-browser-keybinding)
     ("org-previewer" . eaf-browser-keybinding)
     ("mindmap" . eaf-mindmap-keybinding)
-    ("mermaid" . eaf-mermaid-keybinding)
     ("jupyter" . eaf-jupyter-keybinding)
     )
   "Mapping app names to keybinding variables.
@@ -837,8 +791,7 @@ Any new app should add the its name and the corresponding
 keybinding variable to this list.")
 
 (defvar eaf-app-display-function-alist
-  '(("mermaid" . eaf--mermaid-preview-display)
-    ("markdown-previewer" . eaf--markdown-preview-display)
+  '(("markdown-previewer" . eaf--markdown-preview-display)
     ("org-previewer" . eaf--org-preview-display))
   "Mapping app names to display functions.
 
@@ -860,9 +813,9 @@ A bookmark handler function is used as
 (defvar eaf-app-extensions-alist
   '(("pdf-viewer" . eaf-pdf-extension-list)
     ("markdown-previewer" . eaf-markdown-extension-list)
-    ("mermaid" . eaf-mermaid-extension-list)
     ("image-viewer" . eaf-image-extension-list)
     ("video-player" . eaf-video-extension-list)
+    ("music" . eaf-music-extension-list)
     ("browser" . eaf-browser-extension-list)
     ("org-previewer" . eaf-org-extension-list)
     ("mindmap" . eaf-mindmap-extension-list)
@@ -1337,11 +1290,12 @@ keybinding variable to eaf-app-binding-alist."
   (let* ((eaf-buffer-name (if (equal (file-name-nondirectory url) "")
                               url
                             (file-name-nondirectory url)))
-         (eaf-buffer (generate-new-buffer eaf-buffer-name)))
+         (eaf-buffer (generate-new-buffer eaf-buffer-name))
+         (url-directory (or (file-name-directory url) url)))
     (with-current-buffer eaf-buffer
       (eaf-mode)
-      (when (file-accessible-directory-p url)
-        (setq-local default-directory (file-name-directory url)))
+      (when (file-accessible-directory-p url-directory)
+        (setq-local default-directory url-directory))
       ;; `eaf-buffer-url' should record full path of url, otherwise `eaf-open' will open duplicate PDF tab for same url.
       (set (make-local-variable 'eaf--buffer-url) url)
       (set (make-local-variable 'eaf--buffer-app-name) app-name)
@@ -1577,7 +1531,9 @@ of `eaf--buffer-app-name' inside the EAF buffer."
        (throw 'found-eaf t)))))
 
 (defun eaf--show-message (format-string)
-  (message (concat "[EAF/" eaf--buffer-app-name "] " (base64-decode-string format-string))))
+  "A wrapper around `message' that prepend [EAF/app-name] before FORMAT-STRING."
+  (message (concat "[EAF/" eaf--buffer-app-name "] "
+                   (decode-coding-string (base64-decode-string format-string) 'utf-8))))
 
 (defun eaf--set-emacs-var (name value eaf-specific)
   "Set Lisp variable NAME with VALUE on the Emacs side.
@@ -1688,15 +1644,6 @@ WEBENGINE-INCLUDE-PRIVATE-CODEC is only useful when app-name is video-player."
            (when office-pdf
              (with-current-buffer (file-name-nondirectory url)
                (rename-buffer (concat "[Converted] " (substring args 0 (- office-pdf 1))) t)))))))
-
-(defun eaf--mermaid-preview-display (buf)
-  "Given BUF, split window to show file and previewer."
-  (eaf-split-preview-windows
-   (buffer-local-value
-    'eaf--buffer-url buf))
-  (switch-to-buffer buf)
-  (other-window +1)
-  (markdown-mode))
 
 (defun eaf--markdown-preview-display (buf)
   "Given BUF, split window to show file and previewer."
@@ -1872,7 +1819,7 @@ This function works best if paired with a fuzzy search package."
                    (if history-file-exists
                        (mapcar
                         (lambda (h) (when (string-match history-pattern h)
-                                      (format "[%s] ⇰ %s" (match-string 1 h) (match-string 2 h))))
+                                  (format "[%s] ⇰ %s" (match-string 1 h) (match-string 2 h))))
                         (with-temp-buffer (insert-file-contents browser-history-file-path)
                                           (split-string (buffer-string) "\n" t)))
                      nil)))
@@ -1921,6 +1868,11 @@ choose a search engine defined in `eaf-browser-search-engines'"
   "Open EAF demo screen to verify that EAF is working properly."
   (interactive)
   (eaf-open "eaf-demo" "demo"))
+
+(defun eaf-open-music (file)
+  "Open EAF music player."
+  (interactive "F[EAF] Play Music: ")
+  (eaf-open file "music"))
 
 ;;;###autoload
 (defun eaf-open-camera ()
@@ -2014,15 +1966,19 @@ When called interactively, URL accepts a file that can be opened by EAF."
       ;; Initialize url, app-name and args
       (setq app-name (eaf--get-app-for-extension extension-name))
       (cond
-       ((equal app-name "markdown-previewer")
-        ;; Try get user's github token if `eaf-grip-token' is nil.
-        (setq args
-              (or eaf-grip-token
-                  (read-string (concat "[EAF/" app-name "] Fill your own Github token (or set `eaf-grip-token' with token string): ")))))
        ((equal app-name "browser")
         (setq url (concat "file://" url)))
        ((equal app-name "office")
-        (user-error "Please use `eaf-open-office' instead!")))))
+        (user-error "Please use `eaf-open-office' instead!"))
+       ((equal app-name "markdown-previewer")
+        ;; Warning user install java if found PlantUML syntax in markdown file.
+        (with-temp-buffer
+          (insert-file-contents url)
+          (goto-char (point-min))
+          (when (search-forward "```puml" nil t)
+            (unless (executable-find "java")
+              (user-error (format "Have PlantUML code in file '%s', you need to install Java to preview normally." url))
+              )))))))
   ;; Now that app-name should hopefully be set
   (unless app-name
     ;; Output error to user if app-name is empty string.
@@ -2207,11 +2163,10 @@ Make sure that your smartphone is connected to the same WiFi network as this com
     (switch-to-buffer edit-text-buffer)
     (setq-local eaf-mindmap--current-add-mode "")
     (eaf--edit-set-header-line)
-    (insert (base64-decode-string focus-text))
+    (insert (decode-coding-string (base64-decode-string focus-text) 'utf-8))
     ;; When text line number above
     (when (> (line-number-at-pos) 30)
-      (beginning-of-buffer))
-    ))
+      (goto-char (point-min)))))
 
 (defun eaf--edit-set-header-line ()
   "Set header line."
@@ -2414,7 +2369,7 @@ The key is the annot id on PAGE."
 
 (defun eaf--change-default-directory (directory)
   "Change default directory to DIRECTORY."
-  (when (file-accessible-directory-p directory)
+  (when (file-accessible-directory-p (or (file-name-directory directory) directory))
     (setq-local default-directory directory)))
 
 ;;;;;;;;;;;;;;;;;;;; Utils ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2435,10 +2390,10 @@ The key is the annot id on PAGE."
                     'eaf-video-player-keybinding
                     'eaf-js-video-player-keybinding
                     'eaf-image-viewer-keybinding
+                    'eaf-music-keybinding
                     'eaf-terminal-keybinding
                     'eaf-camera-keybinding
                     'eaf-mindmap-keybinding
-                    'eaf-mermaid-keybinding
                     'eaf-jupyter-keybinding
                     )))
     (erase-buffer)
@@ -2535,8 +2490,12 @@ The key is the annot id on PAGE."
 
 You can configure a blacklist using `eaf-find-file-ext-blacklist'"
   (and ext
-       (member (downcase ext) (append eaf-pdf-extension-list eaf-video-extension-list
-                                      eaf-image-extension-list eaf-mindmap-extension-list))
+       (member (downcase ext) (append
+                               eaf-pdf-extension-list
+                               eaf-video-extension-list
+                               eaf-music-extension-list
+                               eaf-image-extension-list
+                               eaf-mindmap-extension-list))
        (not (member ext eaf-find-file-ext-blacklist))))
 
 ;; Make EAF as default app for supported extensions.

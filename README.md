@@ -6,7 +6,7 @@ EAF is a GUI application framework that revolutionizes Emacs graphical capabilit
 ## EAF Application Overview
 EAF is an extensible framework, one can develop any Qt5 application and integrate it into Emacs.
 
-| Browser                                          | Markdown Previewer                                          |
+| Browser                                          | Markdown Previewer (support Mermaid and PlantUML)                                          |
 | :--------:                                       | :----:                                                      |
 | <img src="./screenshot/browser.gif" width="400"> | <img src="./screenshot/markdown_previewer.gif" width="400"> |
 
@@ -42,14 +42,9 @@ EAF is an extensible framework, one can develop any Qt5 application and integrat
 |                                                |           |
 
 
-| Mermaid                                          | EAF Interleave                                          |
+| Jupyter                                          | EAF Interleave                                          |
 | :--------:                                       | :----------:                                            |
-| <img src="./screenshot/mermaid.gif" width="400"> | <img src="./screenshot/eaf-interleave.gif" width="400"> |
-|                                                  |                                                         |
-
-| Jupyter                                          |                                                         |
-| :--------:                                       | :----------:                                            |
-| <img src="./screenshot/jupyter.png" width="400"> |                                                         |
+| <img src="./screenshot/jupyter.png" width="400"> | <img src="./screenshot/eaf-interleave.gif" width="400"> |
 |                                                  |                                                         |
 
 ## EmacsConf2020 - Extend Emacs to Modern GUI Applications with EAF
@@ -95,7 +90,6 @@ Feel free to inspect the install script yourself. An explanation of each depende
 
 3. Install Elisp packages:
 - [emacs-ctable](https://github.com/kiwanami/emacs-ctable)
-- [emacs-ctable](https://github.com/kiwanami/emacs-ctable)
 - [emacs-deferred](https://github.com/kiwanami/emacs-deferred)
 - [emacs-epc](https://github.com/kiwanami/emacs-epc)
 - [s.el](https://github.com/magnars/s.el)
@@ -136,14 +130,13 @@ Packages listed as **Core** are mandatory for EAF to work, whereas other package
 | python-pyqtwebengine           | Core                                 | Chromium based web rendering engine           |
 | wmctrl                         | Core                                 | Activate Emacs window input focus             |
 | python-pymupdf                 | PDF Viewer                           | PDF rendering engine                          |
-| python-grip                    | Markdown Previewer                   | Markdown rendering server                     |
 | python-qrcode                  | File Sender, File Receiver, Airshare | Render QR code pointing to local files        |
-| python-markdown                | Mermaid                              | Covert markdown format to mermaid html format |
 | nodejs                         | Terminal                             | Communicate between browser and local TTY     |
 | aria2                          | Browser                              | Download files from the web                   |
 | libreoffice                    | Doc Viewer                           | Convert doc file to pdf                       |
 | filebrowser-bin                | File Browser                         | Share files between computer and smartphone   |
 | qtconsole                      | Jupyter                              | Provide RichJupyterWidget                     |
+| java-openjdk                      | Markdown Previewer                              | Make mume.js can render PlantUML content                     |
 
 ## Launch EAF Applications
 | Application Name    | Launch                                                                 |
@@ -163,8 +156,8 @@ Packages listed as **Core** are mandatory for EAF to work, whereas other package
 | Airshare            | `M-x eaf-open-airshare`                                                |
 | Mindmap             | `M-x eaf-create-mindmap` or `M-x eaf-open-mindmap`                     |
 | MS Office Viewer    | `M-x eaf-open-office`                                                  |
-| Mermaid             | `M-x eaf-open` Mermaid file (*.mmd)                                    |
 | Jupyter             | `M-x eaf-open-jupyter`                                                 |
+| Music               | `M-x eaf-open-music`                                                 |
 | Demo                | `M-x eaf-open-demo` to verify basic functionality                      |
 
 - EAF Browser and PDF Viewer support Emacs built-in bookmark operation, with `M-x bookmark-set` (defaulted to `C-x r m`) and `M-x bookmark-bmenu-list` (defaulted to `C-x r l`).
@@ -215,15 +208,6 @@ EAF confirms that the desktop environment or window manager you can work include
 We suspect there are some issues with how all the Window Managers implement their x11 protocols.
 
 One workaround is to name of command `wmctrl -m` to the elisp list `eaf-wm-focus-fix-wms`. Fill an issue if it still doesn't work.
-
-### What is Github Personal Access Tokens?
-If you use EAF Markdown Previewer, to get consistent previewing, you need to access [Github Personal access token site](https://github.com/settings/tokens/new?scopes=), fill something in "Token description" and click button "Generate token" to get your personal token. Then set the token:
-
-```Elisp
-(setq eaf-grip-token "yourtokencode")
-```
-
-Although Markdown Previewer works for the first few times by entering empty string when prompted, eventually it stops working and gives "GitHub Rate Limit Reached" error.
 
 ### Proxy
 If you need to use proxy to access internet, one can configure the proxy settings.

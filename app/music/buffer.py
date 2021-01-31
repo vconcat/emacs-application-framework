@@ -19,27 +19,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
-from PyQt5 import QtCore
 from PyQt5.QtCore import QUrl
-from PyQt5.QtCore import QFileSystemWatcher
 from core.browser import BrowserBuffer
-import markdown
+import os
 
 class AppBuffer(BrowserBuffer):
-
-    update_content = QtCore.pyqtSignal()
-
     def __init__(self, buffer_id, url, config_dir, arguments, emacs_var_dict, module_path):
         BrowserBuffer.__init__(self, buffer_id, url, config_dir, arguments, emacs_var_dict, module_path, False)
 
+        self.index_file = os.path.join(os.path.dirname(__file__), "index.html")
         self.url = url
-        self.render()
-        self.file_watcher = QFileSystemWatcher()
-        self.file_watcher.fileChanged.connect(self.render)
-        self.file_watcher.addPath(url)
 
-    def render(self):
-        with open(self.url, "r") as f:
-            html = markdown.markdown(f.read(), extensions=['app.mermaid.md_mermaid'])
+        with open(self.index_file, "r") as f:
+            html = f.read().replace("%1", os.path.join(os.path.dirname(__file__))).replace("%2", self.url)
             self.buffer_widget.setHtml(html, QUrl("file://"))
