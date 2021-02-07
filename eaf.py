@@ -31,6 +31,7 @@ from PyQt5.QtWidgets import QApplication
 from core.utils import PostGui, string_to_base64
 from core.view import View
 from epc.server import ThreadingEPCServer
+from epc.client import EPCClient
 from sys import version_info
 import importlib
 import json
@@ -40,6 +41,8 @@ import platform
 import socket
 import subprocess
 import threading
+if platform.system() == "Windows":
+    import pygetwindow as gw
 
 class EAF(object):
     def __init__(self, args):
@@ -60,6 +63,9 @@ class EAF(object):
         # Update Emacs var dictionary.
         self.update_emacs_var_dict(var_dict_string)
 
+        # Build EPC client.
+        self.client = EPCClient(("localhost", int(emacs_server_port)), log_traceback=True)
+
         # Build EPC server.
         self.server = ThreadingEPCServer(('localhost', 0), log_traceback=True)
         self.server.logger.setLevel(logging.DEBUG)
@@ -77,9 +83,6 @@ class EAF(object):
         # Start EPC server with sub-thread, avoid block Qt main loop.
         self.server_thread = threading.Thread(target=self.server.serve_forever)
         self.server_thread.start()
-
-        # Build emacs server connect, used to send message from Python to elisp side.
-        self.emacs_server_connect = self.build_emacs_server_connect(int(emacs_server_port))
 
         # Pass epc port and webengine codec information to Emacs when first start EAF.
         self.first_start(self.server.server_address[1], self.webengine_include_private_codec())
@@ -250,8 +253,8 @@ class EAF(object):
             app_buffer.export_org_json.connect(self.export_org_json)
 
         # Handle dev tools signal.
-        if getattr(app_buffer, "open_dev_tools_tab", False) and getattr(app_buffer.open_dev_tools_tab, "connect", False):
-            app_buffer.open_dev_tools_tab.connect(self.open_dev_tools_tab)
+        if getattr(app_buffer, "open_devtools_tab", False) and getattr(app_buffer.open_devtools_tab, "connect", False):
+            app_buffer.open_devtools_tab.connect(self.open_devtools_tab)
 
         # Handle fulllscreen signal.
         if getattr(app_buffer, "enter_fullscreen_request", False) and getattr(app_buffer.enter_fullscreen_request, "connect", False):
@@ -270,10 +273,10 @@ class EAF(object):
         if module_path == "app.browser.buffer":
             app_buffer.proxy_string = proxy_string
 
-        # If arguments is dev_tools, create dev tools page.
-        if module_path == "app.browser.buffer" and arguments == "dev_tools" and self.dev_tools_page:
-            self.dev_tools_page.setDevToolsPage(app_buffer.buffer_widget.web_page)
-            self.dev_tools_page = None
+        # If arguments is devtools, create devtools page.
+        if module_path == "app.browser.buffer" and arguments == "devtools" and self.devtools_page:
+            self.devtools_page.setDevToolsPage(app_buffer.buffer_widget.web_page)
+            self.devtools_page = None
 
         # Restore buffer session.
         self.restore_buffer_session(app_buffer)
@@ -405,6 +408,15 @@ class EAF(object):
                 self.message_to_emacs("Cannot call function: " + function_name)
                 return ""
 
+    def get_emacs_xid(self):
+        if platform.system() == "Windows":
+            return gw.getActiveWindow()._hWnd
+
+    def activate_emacs_wsl_window(self, frame_title):
+        if platform.system() == "Windows":
+            w = gw.getWindowsWithTitle(frame_title)
+            w[0].activate()
+
     @PostGui()
     def action_quit(self, buffer_id):
         ''' Execute action_quit() for specified buffer.'''
@@ -470,17 +482,13 @@ class EAF(object):
                 for line in str(new_text).split("\n"):
                     buffer.add_texted_middle_node(line)
 
-    def eval_in_emacs(self, method_name, args_list):
-        code = "(" + str(method_name)
-        for arg in args_list:
-            arg = str(arg)
-            if len(arg) > 0 and arg[0] == "'":
-                code += " {}".format(arg)
-            else:
-                code += " \"{}\"".format(arg)
-        code += ")"
+    def eval_in_emacs(self, method_name, args):
+        # Make argument encode with Base64, avoid string quote problem pass to elisp side.
+        args = list(map(string_to_base64, args))
+        args.insert(0, method_name)
 
-        self.emacs_server_connect.send(str.encode(code))
+        # Call eval-in-emacs elisp function.
+        self.client.call("eval-in-emacs", args)
 
     def add_multiple_sub_nodes(self, buffer_id):
         self.eval_in_emacs('eaf--add-multiple-sub-nodes', [buffer_id])
@@ -506,8 +514,8 @@ class EAF(object):
     def duplicate_page_in_new_tab(self, url):
         self.eval_in_emacs('eaf-browser--duplicate-page-in-new-tab', [url])
 
-    def open_dev_tools_page(self):
-        self.eval_in_emacs('eaf-open-dev-tool-page', [])
+    def open_devtools_page(self):
+        self.eval_in_emacs('eaf-open-devtool-page', [])
 
     def open_url_in_background_tab(self, url):
         self.eval_in_emacs('eaf-open-browser-in-background', [url])
@@ -531,13 +539,13 @@ class EAF(object):
         self.eval_in_emacs('eaf-request-kill-buffer', [buffer_id])
 
     def message_to_emacs(self, message):
-        self.eval_in_emacs('eaf--show-message', [string_to_base64(message)])
+        self.eval_in_emacs('eaf--show-message', [message])
 
     def set_emacs_var(self, var_name, var_value, eaf_specific):
         self.eval_in_emacs('eaf--set-emacs-var', [var_name, var_value, eaf_specific])
 
     def atomic_edit(self, buffer_id, focus_text):
-        self.eval_in_emacs('eaf--atomic-edit', [buffer_id, string_to_base64(focus_text)])
+        self.eval_in_emacs('eaf--atomic-edit', [buffer_id, focus_text])
 
     def export_org_json(self, org_json_content, org_file_path):
         self.eval_in_emacs('eaf--export-org-json', [org_json_content, org_file_path])
@@ -548,10 +556,10 @@ class EAF(object):
     def exit_fullscreen_request(self):
         self.eval_in_emacs('eaf--exit_fullscreen_request', [])
 
-    def open_dev_tools_tab(self, web_page):
-        ''' Open dev-tools tab'''
-        self.dev_tools_page = web_page
-        self.open_dev_tools_page()
+    def open_devtools_tab(self, web_page):
+        ''' Open devtools tab'''
+        self.devtools_page = web_page
+        self.open_devtools_page()
 
     def save_buffer_session(self, buf):
         ''' Save buffer session to file.'''

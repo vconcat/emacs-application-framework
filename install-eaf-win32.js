@@ -7,19 +7,8 @@ const crypto = require("crypto");
 const os = require("os");
 const url = require("url");
 
-const nodeApps = ["js-video-player", "markdown-previewer", "mermaid", "terminal"];
-
-function getAppPath(name) {
-    return path.join("app", name);
-}
-
 function installNodeDep() {
-    for (let i = 0; i < nodeApps.length; i++) {
-        execSync("npm install", {
-            cwd: getAppPath(nodeApps[i]),
-            stdio: [0, 1, 2],
-        });
-    }
+    execSync("npm install");
 }
 
 const pythonDeps = [
@@ -30,7 +19,8 @@ const pythonDeps = [
     "qrcode",
     "markdown",
     "epc",
-    "retrying"
+    "retrying",
+    "pygetwindow"
 ];
 
 function installPythonDep() {
@@ -91,9 +81,17 @@ async function installCodecPack() {
     execSync(installCmd);
 }
 
-installNodeDep();
+try {
+    installPythonDep();
+} catch (err) {
+    console.error(err);
+}
 
-installPythonDep();
+try {
+    installNodeDep();
+} catch (err) {
+    console.error(err);
+}
 
 (async function() {
     try {

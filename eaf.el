@@ -7,7 +7,7 @@
 ;; Copyright (C) 2018, Andy Stewart, all rights reserved.
 ;; Created: 2018-06-15 14:10:12
 ;; Version: 0.5
-;; Last-Updated: Sat Jan 30 14:28:53 2021 (-0500)
+;; Last-Updated: Fri Feb  5 19:58:24 2021 (-0500)
 ;;           By: Mingde (Matthew) Zeng
 ;; URL: https://github.com/manateelazycat/emacs-application-framework
 ;; Keywords:
@@ -94,16 +94,17 @@
           ((eq system-type 'darwin)
            (user-error "Unfortunately MacOS is not supported, see README for details")))))
 
-(require 'subr-x)
-(require 'map)
 (require 'bookmark)
-(require 'seq)
-(require 'eaf-mindmap)
+(require 'cl-lib)
 (require 'eaf-interleave)
-(require 'json)
-(require 's)
-(require 'eaf-server)
+(require 'eaf-mindmap)
 (require 'epc)
+(require 'epcs)
+(require 'json)
+(require 'map)
+(require 's)
+(require 'seq)
+(require 'subr-x)
 
 ;; Remove the relevant environment variables from the process-environment to disable QT scaling,
 ;; let EAF qt program follow the system scale.
@@ -215,6 +216,56 @@ been initialized."
 (defvar eaf-python-file (expand-file-name "eaf.py" (file-name-directory load-file-name)))
 
 (defvar eaf-server-port 9999)
+
+(defun epcs:server-start (connect-function &optional port)
+  "Start TCP Server and return the main process object."
+  (let*
+      ((connect-function connect-function)
+       (name (format "EPC Server %s" (epc:uid)))
+       (buf (epc:make-procbuf (format "*%s*" name)))
+       (main-process
+        (make-network-process
+         :name name
+         :buffer buf
+         :family 'ipv4
+         :server t
+         :host "127.0.0.1"
+         :service (or port t)
+         :sentinel
+         (lambda (process message)
+           (epcs:sentinel process message connect-function)))))
+    (unless port
+      ;; notify port number to the parent process via STDOUT.
+      (message "%s\n" (process-contact main-process :service)))
+    (push (cons main-process
+                (make-epcs:server
+                 :name name :process main-process
+                 :port (process-contact main-process :service)
+                 :connect-function connect-function))
+          epcs:server-processes)
+    main-process))
+
+(defvar eaf-server
+  (epcs:server-start
+   (lambda (mngr)
+     (let ((mngr mngr))
+       (epc:define-method
+        mngr 'eval-in-emacs
+        (lambda (&rest args)
+          ;; Decode argument with Base64 format automatically.
+          (apply (read (car args))
+                 (mapcar
+                  (lambda (arg)
+                    (let ((arg (eaf--decode-string arg)))
+                      (cond ((string-prefix-p "'" arg)
+                             (read (substring arg 1)))
+                            (t arg)))) (cdr args)))))))
+   eaf-server-port))
+
+(when noninteractive
+  ;; Start "event loop".
+  (loop repeat 600
+        do (sleep-for 0.1)))
 
 (defvar eaf-epc-process nil)
 
@@ -422,8 +473,8 @@ Try not to modify this alist directly.  Use `eaf-setq' to modify instead."
     ("2" . "insert_or_save_as_single_file")
     ("v" . "insert_or_view_source")
     ("e" . "insert_or_edit_url")
-    ("M-C" . "copy_code")
-    ("C-M-f" . "copy_link")
+    ("C-M-c" . "copy_code")
+    ("C-M-l" . "copy_link")
     ("C-a" . "select_all_or_input_text")
     ("M-u" . "clear_focus")
     ("C-j" . "open_downloads_setting")
@@ -609,11 +660,11 @@ Try not to modify this alist directly.  Use `eaf-setq' to modify instead."
     ("M-k" . "select_up_node")
     ("M-h" . "select_left_node")
     ("M-l" . "select_right_node")
-    ("SPC" . "toggle_node_selection")
     ("C-n" . "eaf-send-down-key")
     ("C-p" . "eaf-send-up-key")
     ("C-f" . "eaf-send-right-key")
     ("C-b" . "eaf-send-left-key")
+    ("SPC" . "insert_or_toggle_node_selection")
     ("x" . "insert_or_close_buffer")
     ("j" . "insert_or_select_down_node")
     ("k" . "insert_or_select_up_node")
@@ -639,6 +690,7 @@ Try not to modify this alist directly.  Use `eaf-setq' to modify instead."
     ("1" . "insert_or_save_screenshot")
     ("2" . "insert_or_save_file")
     ("3" . "insert_or_save_org_file")
+    ("4" . "insert_or_save_freemind_file")
     ("M-o" . "eval_js")
     ("M-p" . "eval_js_file")
     ("<f12>" . "open_devtools")
@@ -708,7 +760,7 @@ Try not to modify this alist directly.  Use `eaf-setq' to modify instead."
   :type 'cons)
 
 (defcustom eaf-mindmap-extension-list
-  '("emm")
+  '("emm" "mm")
   "The extension list of mindmap application."
   :type 'cons)
 
@@ -1054,7 +1106,9 @@ A hashtable, key is url and value is title.")
 
 (defun eaf-get-emacs-xid (frame)
   "Get Emacs FRAME xid."
-  (frame-parameter frame 'window-id))
+  (if (eaf--called-from-wsl-on-windows-p)
+      (eaf-call-sync "get_emacs_xid")
+    (frame-parameter frame 'window-id)))
 
 (defun eaf-serialization-var-list ()
   "Serialize variable list."
@@ -1082,9 +1136,6 @@ A hashtable, key is url and value is title.")
       (when (and wayland-display (not (string= wayland-display "")))
         (setenv "QT_QPA_PLATFORM" "xcb")))
 
-    ;; Start emacs server.
-    (eaf-server-start eaf-server-port)
-
     ;; Start python process.
     (if eaf-enable-debug
         (progn
@@ -1092,11 +1143,11 @@ A hashtable, key is url and value is title.")
           (setq eaf-internal-process-args (append gdb-args eaf-args)))
       (setq eaf-internal-process-prog eaf-python-command)
       (setq eaf-internal-process-args eaf-args))
-
-    (setq eaf-internal-process
-          (apply 'start-process
-                 eaf-name eaf-name
-                 eaf-internal-process-prog eaf-internal-process-args))
+    (let ((process-connection-type (not (eaf--called-from-wsl-on-windows-p))))
+      (setq eaf-internal-process
+            (apply 'start-process
+                   eaf-name eaf-name
+                   eaf-internal-process-prog eaf-internal-process-args)))
     (set-process-query-on-exit-flag eaf-internal-process nil))
   (message "[EAF] Process starting..."))
 
@@ -1114,8 +1165,7 @@ If RESTART is non-nil, cached URL and app-name will not be cleared."
     (remove-hook 'after-save-hook #'eaf--org-preview-monitor-buffer-save)
     (remove-hook 'kill-buffer-hook #'eaf--org-preview-monitor-kill)
     (remove-hook 'window-size-change-functions #'eaf-monitor-window-size-change)
-    (remove-hook 'window-configuration-change-hook #'eaf-monitor-configuration-change)
-    (eaf-server-stop eaf-server-port))
+    (remove-hook 'window-configuration-change-hook #'eaf-monitor-configuration-change))
 
   ;; Clean `eaf-org-file-list' and `eaf-org-killed-file-list'.
   (dolist (org-file-name eaf-org-file-list)
@@ -1159,6 +1209,14 @@ If RESTART is non-nil, cached URL and app-name will not be cleared."
   (eaf-stop-process t)
   (eaf-start-process))
 
+(defun eaf--decode-string (str)
+  "Decode string STR with UTF-8 coding using Base64."
+  (decode-coding-string (base64-decode-string str) 'utf-8))
+
+(defun eaf--encode-string (str)
+  "Encode string STR with UTF-8 coding using Base64."
+  (base64-encode-string (encode-coding-string str 'utf-8)))
+
 (defun eaf-get-render-size ()
   "Get allocation for render application in backend.
 We need calcuate render allocation to make sure no black border around render content."
@@ -1178,7 +1236,7 @@ We need calcuate render allocation to make sure no black border around render co
                    (window-header-line-height window)
                  (window-tab-line-height window))
                (if (and (require 'tab-line nil t)
-                        tab-line-mode) ; Support emacs 27 tab-line-mode
+                        tab-line-mode) ; Support Emacs 27 tab-line-mode
                    (window-tab-line-height window)
                  0)))
          (w (- (nth 2 window-edges) x))
@@ -1532,8 +1590,10 @@ of `eaf--buffer-app-name' inside the EAF buffer."
 
 (defun eaf--show-message (format-string)
   "A wrapper around `message' that prepend [EAF/app-name] before FORMAT-STRING."
-  (message (concat "[EAF/" eaf--buffer-app-name "] "
-                   (decode-coding-string (base64-decode-string format-string) 'utf-8))))
+  (message "[EAF/%s] %s"
+           eaf--buffer-app-name
+           format-string
+           ))
 
 (defun eaf--set-emacs-var (name value eaf-specific)
   "Set Lisp variable NAME with VALUE on the Emacs side.
@@ -1633,7 +1693,11 @@ WEBENGINE-INCLUDE-PRIVATE-CODEC is only useful when app-name is video-player."
   "Open an EAF application internally with URL, APP-NAME and ARGS."
   (let* ((buffer (eaf--create-buffer url app-name args)))
     (with-current-buffer buffer
-      (eaf-call-async "new_buffer" eaf--buffer-id url app-name args))
+      (eaf-call-async "new_buffer" eaf--buffer-id
+                      (if (eaf--called-from-wsl-on-windows-p)
+                          (eaf--translate-wsl-url-to-windows url)
+                        url)
+                      app-name args))
     (eaf--display-app-buffer app-name buffer))
   (eaf--post-open-actions url app-name args))
 
@@ -1738,11 +1802,12 @@ In that way the corresponding function will be called to retrieve the HTML
       (insert html))
     (eaf-open file "browser" "temp_html_file")))
 
-(defun eaf-open-dev-tool-page ()
+(defun eaf-open-devtool-page ()
+  "Use EAF Browser to open the devtools page."
   (delete-other-windows)
   (split-window (selected-window) (/ (* (nth 3 (eaf-get-window-allocation (selected-window))) 2) 3) nil t)
   (other-window 1)
-  (eaf-open "about:blank" "browser" "dev_tools"))
+  (eaf-open "about:blank" "browser" "devtools"))
 
 ;;;###autoload
 (defun eaf-open-browser (url &optional args)
@@ -1754,7 +1819,7 @@ In that way the corresponding function will be called to retrieve the HTML
   "Duplicate a new tab for the dedicated URL."
   (eaf-open (eaf-wrap-url url) "browser" nil t))
 
-(defun eaf-is-valid-url (url)
+(defun eaf-is-valid-web-url (url)
   "Return the same URL if it is valid."
   (when (and url
              ;; URL should not include blank char.
@@ -1819,14 +1884,14 @@ This function works best if paired with a fuzzy search package."
                    (if history-file-exists
                        (mapcar
                         (lambda (h) (when (string-match history-pattern h)
-                                  (format "[%s] ⇰ %s" (match-string 1 h) (match-string 2 h))))
+                                      (format "[%s] ⇰ %s" (match-string 1 h) (match-string 2 h))))
                         (with-temp-buffer (insert-file-contents browser-history-file-path)
                                           (split-string (buffer-string) "\n" t)))
                      nil)))
-         (history-url (eaf-is-valid-url (when (string-match "⇰\s\\(.+\\)$" history)
+         (history-url (eaf-is-valid-web-url (when (string-match "⇰\s\\(.+\\)$" history)
                                           (match-string 1 history)))))
     (cond (history-url (eaf-open-browser history-url))
-          ((eaf-is-valid-url history) (eaf-open-browser history))
+          ((eaf-is-valid-web-url history) (eaf-open-browser history))
           (t (eaf-search-it history)))))
 
 ;;;###autoload
@@ -1922,7 +1987,7 @@ If ALWAYS-NEW is non-nil, always open a new terminal for the dedicated DIR."
 (defun eaf--non-remote-default-directory ()
   "Return `default-directory' itself if is not part of remote, otherwise return $HOME."
   (if (or (file-remote-p default-directory)
-          (not (file-exists-p default-directory)))
+          (not (file-accessible-directory-p default-directory)))
       (getenv "HOME")
     default-directory))
 
@@ -1944,6 +2009,15 @@ If ALWAYS-NEW is non-nil, always open a new terminal for the dedicated DIR."
 (defun eaf-get-file-name-extension (file)
   "A wrapper around `file-name-extension' that downcases the extension of the FILE."
   (downcase (file-name-extension file)))
+
+(defun eaf--called-from-wsl-on-windows-p ()
+  "Check whether eaf is called by Emacs on WSL and is running on Windows."
+  (and (eq system-type 'gnu/linux)
+       (string-match-p ".exe" eaf-python-command)))
+
+(defun eaf--translate-wsl-url-to-windows (path)
+  "Translate from a WSL path to a Windows path'"
+  (replace-regexp-in-string "/mnt/\\([a-zA-Z]\\)" "\\1:" path))
 
 ;;;###autoload
 (defun eaf-open (url &optional app-name args always-new)
@@ -2097,12 +2171,12 @@ Make sure that your smartphone is connected to the same WiFi network as this com
         (t
          (eaf-call-async "update_focus_text"
                          eaf--buffer-id
-                         (base64-encode-string (encode-coding-string (buffer-string) 'utf-8)))))
+                         (eaf--encode-string (buffer-string)))))
   (kill-buffer)
   (delete-window))
 
 (defun eaf-edit-buffer-switch-to-org-mode ()
-  "Switch to org-mode to edit table handly."
+  "Switch to `org-mode' to edit table handily."
   (interactive)
   (let ((buffer-app-name eaf--buffer-app-name)
         (buffer-id eaf--buffer-id))
@@ -2163,7 +2237,7 @@ Make sure that your smartphone is connected to the same WiFi network as this com
     (switch-to-buffer edit-text-buffer)
     (setq-local eaf-mindmap--current-add-mode "")
     (eaf--edit-set-header-line)
-    (insert (decode-coding-string (base64-decode-string focus-text) 'utf-8))
+    (insert focus-text)
     ;; When text line number above
     (when (> (line-number-at-pos) 30)
       (goto-char (point-min)))))
@@ -2293,7 +2367,7 @@ The key is the annot id on PAGE."
     eaf-wm-name))
 
 (defun eaf--activate-emacs-win32-window()
-  "Use vbs activate emacs win32 window."
+  "Use vbs activate Emacs win32 window."
   (let* ((activate-window-file-path
           (concat eaf-config-location "activate-window.vbs"))
          (activate-window-file-exists (file-exists-p activate-window-file-path)))
@@ -2302,8 +2376,12 @@ The key is the annot id on PAGE."
         (insert "set WshShell = CreateObject(\"WScript.Shell\")\nWshShell.AppActivate Wscript.Arguments(0)")))
     (shell-command-to-string (format "cscript %s %s" activate-window-file-path (emacs-pid)))))
 
+(defun eaf--activate-emacs-wsl-window()
+  "Activate Emacs window running on Wsl."
+  (eaf-call-async "activate_emacs_wsl_window" (frame-parameter nil 'name)))
+
 (defun eaf--activate-emacs-linux-window ()
-  "Activate emacs window by `wmctrl'."
+  "Activate Emacs window by `wmctrl'."
   (if (member (eaf--get-current-desktop-name) eaf-wm-focus-fix-wms)
       ;; When switch app focus in WM, such as, i3 or qtile.
       ;; Emacs window cannot get the focus normally if mouse in EAF buffer area.
@@ -2319,13 +2397,17 @@ The key is the annot id on PAGE."
     ;; So we use wmctrl activate on Emacs window after Alt + Tab operation.
     (if (executable-find "wmctrl")
         (shell-command-to-string (format "wmctrl -i -a $(wmctrl -lp | awk -vpid=$PID '$3==%s {print $1; exit}')" (emacs-pid)))
-      (message "Please install wmctrl to active emacs window."))))
+      (message "Please install wmctrl to active Emacs window."))))
 
 (defun eaf-activate-emacs-window()
-  "Activate emacs window."
-  (if (memq system-type '(cygwin windows-nt ms-dos))
-      (eaf--activate-emacs-win32-window)
-    (eaf--activate-emacs-linux-window)))
+  "Activate Emacs window."
+  (cond
+   ((eaf--called-from-wsl-on-windows-p)
+    (eaf--activate-emacs-wsl-window))
+   ((memq system-type '(cygwin windows-nt ms-dos))
+    (eaf--activate-emacs-win32-window))
+   ((eq system-type 'gnu/linux)
+    (eaf--activate-emacs-linux-window))))
 
 (defun eaf-elfeed-open-url ()
   "Display the currently selected item in an eaf buffer."
