@@ -62,6 +62,7 @@ class View(QWidget):
         # Init widget attributes.
         self.setWindowFlags(Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_X11DoNotAcceptFocus, True)
+        # self.setAttribute(Qt.WA_ShowWithoutActivating, True)
         self.setContentsMargins(0, 0, 0, 0)
         self.installEventFilter(self)
 
@@ -133,7 +134,7 @@ class View(QWidget):
     def eventFilter(self, obj, event: QEvent):
         import time
         if event.type() != QEvent.UpdateRequest:
-            print(time.time(), event_types.as_string(event.type()), event.spontaneous(), flush=True)
+            self.buffer.message_to_emacs.emit("T: {0}, E: {1}\n".format(time.time(), event_types.as_string(event.type())))
 
         if event.type() in [QEvent.ShortcutOverride]:
             self.buffer.eval_in_emacs.emit('eaf-activate-emacs-window', [])
