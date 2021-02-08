@@ -7,7 +7,7 @@
 ;; Copyright (C) 2018, Andy Stewart, all rights reserved.
 ;; Created: 2018-06-15 14:10:12
 ;; Version: 0.5
-;; Last-Updated: Fri Feb  5 19:58:24 2021 (-0500)
+;; Last-Updated: Sun Feb  7 22:49:09 2021 (-0500)
 ;;           By: Mingde (Matthew) Zeng
 ;; URL: https://github.com/manateelazycat/emacs-application-framework
 ;; Keywords:
@@ -725,7 +725,7 @@ Try not to modify this alist directly.  Use `eaf-setq' to modify instead."
   :type 'cons)
 
 (defcustom eaf-pdf-extension-list
-  '("pdf" "xps" "oxps" "cbz" "epub" "fb2" "fbz" "djvu")
+  '("pdf" "xps" "oxps" "cbz" "epub" "fb2" "fbz")
   "The extension list of pdf application."
   :type 'cons)
 
@@ -1107,7 +1107,7 @@ A hashtable, key is url and value is title.")
 (defun eaf-get-emacs-xid (frame)
   "Get Emacs FRAME xid."
   (if (eaf--called-from-wsl-on-windows-p)
-      (eaf-call-sync "get_emacs_xid")
+      (eaf-call-sync "get_emacs_wsl_window_id")
     (frame-parameter frame 'window-id)))
 
 (defun eaf-serialization-var-list ()
